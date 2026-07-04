@@ -47,6 +47,16 @@ body {
 .linkbtn { background: none; border: none; cursor: pointer; font-family: var(--font-ui); font-size: 13px; color: var(--ink-mid); padding: 6px 2px; }
 .linkbtn:hover { color: var(--ink); }
 
+/* ---------- sync bar ---------- */
+.sync-bar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 16px 0 4px; }
+.sync-bar .sp { flex: 1; }
+.integrations { display: flex; gap: 8px 14px; flex-wrap: wrap; }
+.intg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); font-weight: 500; }
+.intg small { color: var(--ink-low); font-weight: 400; }
+.intg .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); }
+.intg.off { color: var(--ink-low); }
+.intg.off .dot { background: var(--ink-low); }
+
 /* ---------- controls ---------- */
 .controls { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin: 16px 0 12px; }
 .controls input[type="date"] {

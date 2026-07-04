@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;650&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/sync.css?v=2" />
+  <link rel="stylesheet" href="assets/css/sync.css?v=3" />
 </head>
 <body>
   <!-- venue sign-in -->
@@ -31,6 +31,12 @@
       <button class="linkbtn" id="signOut" type="button">Sign out</button>
     </header>
 
+    <div class="sync-bar">
+      <div class="integrations" id="integrations"></div>
+      <span class="sp"></span>
+      <button class="btn primary" id="syncBtn" type="button">Sync partners</button>
+    </div>
+
     <div class="controls">
       <input type="date" id="day" />
       <div class="legend" id="legend"></div>
@@ -42,9 +48,10 @@
     </div>
 
     <p class="note">
-      Tap a free cell to record a booking from any channel — the slot blocks everywhere
-      the moment it saves. Tap a coloured cell to see who holds it or to release it.
-      Marketplace sync (Playo · Hudle · District partner APIs) plugs into this same board.
+      A read-only availability board. Bookings arrive from the channel partners
+      (Playo · Hudle · District) and your website — a slot taken on any channel is
+      blocked on all of them. Tap a coloured cell to see who holds it. Nothing is
+      entered by hand here; everything is driven by the partner APIs and the ledger.
     </p>
   </div>
 
@@ -218,67 +225,57 @@
       function closeDlg() { back.classList.remove("open"); }
       back.addEventListener("click", function (e) { if (e.target === back) closeDlg(); });
 
-      function openAdd(court, sport, hour) {
-        dlg.innerHTML = "<h2>Block this slot</h2>" +
-          '<div class="slotline">' + court + " · " + hourLabel(hour) + "–" + hourLabel(hour + 1) + " · " + dayInput.value + "</div>" +
-          '<div class="row"><label><span>Channel</span><select id="dSrc">' +
-          CHANNELS.map(function (c) { return "<option>" + esc(c.id) + "</option>"; }).join("") + "</select></label></div>" +
-          '<div class="row"><label><span>Booked by</span><input id="dName" placeholder="Name (optional)" /></label></div>' +
-          '<div class="err" id="dErr"></div>' +
-          '<div class="acts"><button class="btn" id="dCancel" type="button">Close</button>' +
-          '<button class="btn primary" id="dSave" type="button">Save booking</button></div>';
-        back.classList.add("open");
-        document.getElementById("dCancel").onclick = closeDlg;
-        document.getElementById("dSave").onclick = function () {
-          var btn = this; btn.disabled = true;
-          req("POST", "/rpc/record_booking", {
-            p_tenant: VENUE, p_sport: sport, p_date: dayInput.value, p_hour: hour,
-            p_name: document.getElementById("dName").value || "Blocked", p_phone: null,
-            p_source: document.getElementById("dSrc").value, p_court: court,
-          }).then(function () {
-            closeDlg(); toast(court + " blocked · " + hourLabel(hour) + " ✓");
-            loadDay().then(render);
-          }).catch(function (err) {
-            btn.disabled = false;
-            document.getElementById("dErr").textContent = err.message;
-          });
-        };
-      }
-
+      // READ-ONLY board: bookings arrive from partner channels (API/sync),
+      // never entered by hand here. Tapping a booked cell shows who holds it.
       function openDetail(id) {
         var b = bookings.find(function (x) { return x.id === id; });
         if (!b) return;
         dlg.innerHTML = "<h2>" + esc(b.source) + " booking</h2>" +
           '<div class="slotline">' + b.court + " · " + hourLabel(b.hour) + "–" + hourLabel(b.hour + 1) + " · " + dayInput.value + "</div>" +
           '<div class="who">' + esc(b.name) + (b.phone ? " · " + esc(b.phone) : "") + "</div>" +
-          '<div class="meta">₹' + b.amount.toLocaleString("en-IN") + " · " + b.status + "</div>" +
-          '<div class="err" id="dErr"></div>' +
-          '<div class="acts"><button class="btn" id="dCancel" type="button">Close</button>' +
-          '<button class="btn danger" id="dRelease" type="button">Release slot</button></div>';
+          '<div class="meta">₹' + b.amount.toLocaleString("en-IN") + " · " + b.status + " · via " + esc(b.source) + "</div>" +
+          '<div class="acts"><button class="btn primary" id="dCancel" type="button">Close</button></div>';
         back.classList.add("open");
         document.getElementById("dCancel").onclick = closeDlg;
-        document.getElementById("dRelease").onclick = function () {
-          var btn = this; btn.disabled = true;
-          req("POST", "/rpc/cancel_booking", { p_id: id }).then(function () {
-            closeDlg(); toast(b.court + " released ✓");
-            loadDay().then(render);
-          }).catch(function (err) {
-            btn.disabled = false;
-            document.getElementById("dErr").textContent = err.message;
-          });
-        };
       }
 
       document.getElementById("grid").addEventListener("click", function (e) {
         var cell = e.target.closest(".cell");
         if (!cell) return;
         if (cell.dataset.id) return openDetail(cell.dataset.id);
-        if (cell.classList.contains("past")) return;
-        openAdd(cell.dataset.court, cell.dataset.sport, +cell.dataset.hour);
+        // free cells are not manually bookable — everything is channel-driven
+      });
+
+      /* ---------- channel integrations + sync ---------- */
+      function loadIntegrations() {
+        return req("GET", "/integrations?tenant_id=eq." + VENUE + "&select=channel,enabled,last_sync_at,last_result&order=channel").then(function (rows) {
+          var host = document.getElementById("integrations");
+          if (!rows || !rows.length) { host.innerHTML = ""; return; }
+          host.innerHTML = rows.map(function (r) {
+            var when = r.last_sync_at ? "synced " + ago(r.last_sync_at) : "never synced";
+            return '<span class="intg' + (r.enabled ? "" : " off") + '"><span class="dot"></span>' + esc(r.channel) +
+              ' <small>' + when + "</small></span>";
+          }).join("");
+        }).catch(function () {});
+      }
+      function ago(ts) { var m = (Date.now() - new Date(ts)) / 60000; return m < 60 ? Math.max(1, Math.round(m)) + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; }
+      document.getElementById("syncBtn").addEventListener("click", function () {
+        var btn = this; btn.disabled = true; btn.textContent = "Syncing…";
+        req("GET", "/integrations?tenant_id=eq." + VENUE + "&enabled=eq.true&select=channel").then(function (chs) {
+          return Promise.all((chs || []).map(function (c) {
+            return req("POST", "/rpc/partner_sync", { p_tenant: VENUE, p_channel: c.channel }).catch(function () { return null; });
+          }));
+        }).then(function (results) {
+          var imported = results.reduce(function (s, r) { return s + (r && r.imported ? r.imported : 0); }, 0);
+          btn.disabled = false; btn.textContent = "Sync partners";
+          toast(imported ? imported + " new booking(s) pulled from partners" : "No new partner bookings");
+          loadIntegrations(); loadDay().then(render);
+        });
       });
 
       /* ---------- boot ---------- */
       function init() {
+        loadIntegrations();
         req("POST", "/rpc/get_channels", {}).then(function (list) {
           if (list && list.length) CHANNELS = list;
         }).catch(function () {}).then(function () {
