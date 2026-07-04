@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;650&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/sync.css?v=1" />
+  <link rel="stylesheet" href="assets/css/sync.css?v=2" />
 </head>
 <body>
   <!-- venue sign-in -->
@@ -63,7 +63,16 @@
       var BASE = PROJECT + "/rest/v1";
       var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnc2tsY2lwenlpb2d4eW5zaG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4OTUyMzksImV4cCI6MjA5ODQ3MTIzOX0.w7xkjdTkYN2qA0oxMKLUNtua0ScKVHKQzfEyIayh9eo";
       var VENUE = new URLSearchParams(location.search).get("venue") || "leo";
-      var CHANNELS = ["Playo", "Hudle", "District", "Walk-in", "Website"];
+      // channels from the platform MASTER LIST (get_channels) — add a channel
+      // in the DB once and it appears here, in every academy app and the console
+      var CHANNELS = [
+        { id: "Website", label: "Website", color: "#e8c268" },
+        { id: "Playo", label: "Playo", color: "#34d399" },
+        { id: "Hudle", label: "Hudle", color: "#cbe34f" },
+        { id: "District", label: "District", color: "#60a5fa" },
+        { id: "Walk-in", label: "Walk-in", color: "#9aa3b2" },
+      ];
+      function chColor(id) { var c = CHANNELS.find(function (x) { return x.id === id; }); return c ? c.color : "#9aa3b2"; }
 
       /* ---------- session (same auth as the platform) ---------- */
       var SKEY = "cs-session";
@@ -182,11 +191,11 @@
             var c = courts[ci];
             var b = byCell[c.id + ":" + h];
             var cls = "cell";
-            if (b) cls += " busy src-" + b.source + (b.status === "pending" ? " pend" : "");
+            if (b) cls += " busy" + (b.status === "pending" ? " pend" : "");
             if (isToday && h < nowH && !b) cls += " past";
             if (isToday && h === nowH) cls += " now";
             html.push('<button type="button" class="' + cls + '" data-court="' + c.id + '" data-sport="' + c.sport + '" data-hour="' + h + '"' +
-              (b ? ' data-id="' + b.id + '"' : "") + ">" + (b ? "<i></i>" : "") + "</button>");
+              (b ? ' data-id="' + b.id + '"' : "") + ">" + (b ? '<i style="background:' + chColor(b.source) + ';"></i>' : "") + "</button>");
           }
         }
         grid.innerHTML = html.join("");
@@ -194,7 +203,7 @@
         var counts = {};
         bookings.forEach(function (b) { counts[b.source] = (counts[b.source] || 0) + 1; });
         document.getElementById("legend").innerHTML = CHANNELS.map(function (ch) {
-          return '<span><span class="sw" style="background:var(--ch-' + ch.toLowerCase().replace("-", "") + ');"></span>' + ch + " <b>" + (counts[ch] || 0) + "</b></span>";
+          return '<span><span class="sw" style="background:' + ch.color + ';"></span>' + esc(ch.label) + " <b>" + (counts[ch.id] || 0) + "</b></span>";
         }).join("");
         var revenue = bookings.reduce(function (s, b) { return s + (b.status === "confirmed" ? b.amount : 0); }, 0);
         document.getElementById("foot").innerHTML =
@@ -213,7 +222,7 @@
         dlg.innerHTML = "<h2>Block this slot</h2>" +
           '<div class="slotline">' + court + " · " + hourLabel(hour) + "–" + hourLabel(hour + 1) + " · " + dayInput.value + "</div>" +
           '<div class="row"><label><span>Channel</span><select id="dSrc">' +
-          CHANNELS.map(function (c) { return "<option>" + c + "</option>"; }).join("") + "</select></label></div>" +
+          CHANNELS.map(function (c) { return "<option>" + esc(c.id) + "</option>"; }).join("") + "</select></label></div>" +
           '<div class="row"><label><span>Booked by</span><input id="dName" placeholder="Name (optional)" /></label></div>' +
           '<div class="err" id="dErr"></div>' +
           '<div class="acts"><button class="btn" id="dCancel" type="button">Close</button>' +
@@ -270,7 +279,11 @@
 
       /* ---------- boot ---------- */
       function init() {
-        loadVenue().then(loadDay).then(render).catch(function (err) {
+        req("POST", "/rpc/get_channels", {}).then(function (list) {
+          if (list && list.length) CHANNELS = list;
+        }).catch(function () {}).then(function () {
+          return loadVenue().then(loadDay).then(render);
+        }).catch(function (err) {
           toast("Couldn't load the board: " + err.message);
         });
       }
