@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;650&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/sync.css?v=4" />
+  <link rel="stylesheet" href="assets/css/sync.css?v=5" />
 </head>
 <body>
   <!-- venue sign-in -->
@@ -282,9 +282,14 @@
           }));
         }).then(function (results) {
           var imported = results.reduce(function (s, r) { return s + (r && r.imported ? r.imported : 0); }, 0);
-          btn.disabled = false; btn.textContent = "Sync partners";
-          toast(imported ? imported + " new booking(s) pulled — blocks pushed to other channels" : "No new partner bookings");
-          loadIntegrations(); loadActivity(); loadDay().then(render);
+          // drain the propagation queue: the worker pushes the block calls
+          // to every other channel (durable, retried). Real deploys run this
+          // on a cron Edge Function; here we trigger it inline for the demo.
+          return req("POST", "/rpc/process_sync_jobs", { p_limit: 50 }).catch(function () { return null; }).then(function () {
+            btn.disabled = false; btn.textContent = "Sync partners";
+            toast(imported ? imported + " new booking(s) pulled — blocks pushed to other channels" : "No new partner bookings");
+            loadIntegrations(); loadActivity(); loadDay().then(render);
+          });
         });
       });
 
