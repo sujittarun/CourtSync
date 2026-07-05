@@ -16,8 +16,8 @@
     <form class="gate-card" id="gateForm">
       <div class="mark">Court<b>Sync</b></div>
       <p>Operator console — the live channel-sync monitor across every venue. Venues connect their own channels from their app; you watch and trigger syncs here.</p>
-      <!-- prefilled DUMMY credentials — remove the value attributes at handover -->
-      <label><span>Email</span><input type="email" name="email" required value="staff@leoacademy.in" /></label>
+      <!-- prefilled DUMMY operator credentials — remove the value attributes at handover -->
+      <label><span>Email</span><input type="email" name="email" required value="operator@academymanager.in" /></label>
       <label><span>Password</span><input type="password" name="password" required value="123456" /></label>
       <button class="btn primary" type="submit">Open the board</button>
     </form>
@@ -26,7 +26,8 @@
   <div class="wrap">
     <header class="top">
       <div class="mark">Court<b>Sync</b></div>
-      <span class="venue" id="venueName">—</span>
+      <select class="venue" id="venueSelect" aria-label="Select venue"
+        style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:inherit;font:inherit;font-weight:600;padding:6px 30px 6px 12px;border-radius:8px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2322d3ee%22 stroke-width=%222%22><path d=%22M2 4l4 4 4-4%22/></svg>');background-repeat:no-repeat;background-position:right 10px center;"></select>
       <span class="sp"></span>
       <button class="linkbtn" id="signOut" type="button">Sign out</button>
     </header>
@@ -71,7 +72,7 @@
       var PROJECT = "https://ugsklcipzyiogxynshnh.supabase.co";
       var BASE = PROJECT + "/rest/v1";
       var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnc2tsY2lwenlpb2d4eW5zaG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4OTUyMzksImV4cCI6MjA5ODQ3MTIzOX0.w7xkjdTkYN2qA0oxMKLUNtua0ScKVHKQzfEyIayh9eo";
-      var VENUE = new URLSearchParams(location.search).get("venue") || "leo";
+      var VENUE = new URLSearchParams(location.search).get("venue") || null;
       // channels from the platform MASTER LIST (get_channels) — add a channel
       // in the DB once and it appears here, in every academy app and the console
       var CHANNELS = [
@@ -163,7 +164,6 @@
         return req("GET", "/tenants?id=eq." + VENUE + "&select=name,config").then(function (rows) {
           if (!rows || !rows[0]) throw new Error("venue not visible to this login");
           venueCfg = rows[0].config || {};
-          document.getElementById("venueName").textContent = rows[0].name;
           courts = [];
           var cc = venueCfg.courts || {};
           Object.keys(cc).forEach(function (sport) {
@@ -299,16 +299,33 @@
       });
 
       /* ---------- boot ---------- */
-      function init() {
+      // load one venue's board; also keep the URL shareable (?venue=…)
+      function switchVenue(id) {
+        VENUE = id;
+        var u = new URL(location); u.searchParams.set("venue", id); history.replaceState(null, "", u);
         loadIntegrations();
         loadActivity();
-        req("POST", "/rpc/get_channels", {}).then(function (list) {
-          if (list && list.length) CHANNELS = list;
-        }).catch(function () {}).then(function () {
-          return loadVenue().then(loadDay).then(render);
-        }).catch(function (err) {
+        loadVenue().then(loadDay).then(render).catch(function (err) {
           toast("Couldn't load the board: " + err.message);
         });
+      }
+      function init() {
+        req("POST", "/rpc/get_channels", {}).then(function (list) {
+          if (list && list.length) CHANNELS = list;
+        }).catch(function () {})
+          // one operator login → the venue list is RLS-scoped (operator sees all
+          // venues; a standalone venue sees only its own). Pick from the dropdown.
+          .then(function () { return req("GET", "/tenants?select=id,name&order=name"); })
+          .then(function (tenants) {
+            tenants = tenants || [];
+            var sel = document.getElementById("venueSelect");
+            if (!tenants.length) { toast("No venues are visible to this login"); return; }
+            sel.innerHTML = tenants.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("");
+            var want = (VENUE && tenants.some(function (t) { return t.id === VENUE; })) ? VENUE : tenants[0].id;
+            sel.value = want;
+            sel.onchange = function () { switchVenue(this.value); };
+            switchVenue(want);
+          }).catch(function (err) { toast("Couldn't load venues: " + err.message); });
       }
       dayInput.value = iso(new Date());
       dayInput.addEventListener("change", function () { loadDay().then(render); });
