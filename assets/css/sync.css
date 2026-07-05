@@ -148,6 +148,17 @@ body {
 .btn.primary { background: var(--cyan); border-color: transparent; color: #06222b; }
 .btn.danger { color: #ff8f8f; border-color: rgba(255, 107, 107, 0.4); }
 .btn:disabled { opacity: 0.5; cursor: default; }
+.chn { border-top: 1px solid var(--hair); padding: 12px 0; }
+.chn-h { font-size: 13.5px; font-weight: 500; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.chn-h .dot { width: 8px; height: 8px; border-radius: 50%; }
+.chn-ok { font-size: 11px; color: var(--cyan); }
+.chn select.chn-m { width: 100%; margin-top: 8px; padding: 9px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--hair-strong); color: var(--ink); font-size: 13px; }
+.chn-creds { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.chn-creds .ci { padding: 9px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--hair-strong); color: var(--ink); font-size: 13px; }
+.chn-creds .ci:focus { border-color: var(--cyan); outline: none; }
+.chn-note { font-size: 12px; color: var(--ink-low); }
+.chn .chn-save { margin-top: 8px; padding: 8px 16px; }
+
 .dlg .who { font-size: 13px; color: var(--ink); margin-top: 10px; }
 .dlg .meta { font-size: 12px; color: var(--ink-low); margin-top: 3px; }
 .dlg .err { font-size: 12.5px; color: #ff8f8f; margin-top: 10px; min-height: 16px; }
