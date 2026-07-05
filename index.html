@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;650&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/sync.css?v=3" />
+  <link rel="stylesheet" href="assets/css/sync.css?v=4" />
 </head>
 <body>
   <!-- venue sign-in -->
@@ -46,6 +46,8 @@
       <div class="grid" id="grid"></div>
       <div class="board-foot" id="foot"></div>
     </div>
+
+    <div class="activity" id="syncActivity"></div>
 
     <p class="note">
       A read-only availability board. Bookings arrive from the channel partners
@@ -259,6 +261,19 @@
         }).catch(function () {});
       }
       function ago(ts) { var m = (Date.now() - new Date(ts)) / 60000; return m < 60 ? Math.max(1, Math.round(m)) + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; }
+      function loadActivity() {
+        return req("GET", "/sync_log?tenant_id=eq." + VENUE + "&order=at.desc&limit=8&select=channel,action,status,detail,at").then(function (rows) {
+          var host = document.getElementById("syncActivity");
+          if (!rows || !rows.length) { host.innerHTML = ""; return; }
+          host.innerHTML = '<div class="act-h">Sync activity</div>' + rows.map(function (r) {
+            var arrow = r.action === "pull" ? "↓" : r.action === "push" ? "↑" : "•";
+            var what = r.action === "pull" ? "booking from " + esc(r.channel) : r.action === "push" ? "block sent to " + esc(r.channel) : esc(r.channel);
+            return '<div class="act-row"><span class="act-ar ' + r.action + '">' + arrow + "</span>" +
+              "<span>" + what + ' <small>' + esc(r.detail || "") + "</small></span>" +
+              '<span class="act-when">' + ago(r.at) + "</span></div>";
+          }).join("");
+        }).catch(function () {});
+      }
       document.getElementById("syncBtn").addEventListener("click", function () {
         var btn = this; btn.disabled = true; btn.textContent = "Syncing…";
         req("GET", "/integrations?tenant_id=eq." + VENUE + "&enabled=eq.true&select=channel").then(function (chs) {
@@ -268,14 +283,15 @@
         }).then(function (results) {
           var imported = results.reduce(function (s, r) { return s + (r && r.imported ? r.imported : 0); }, 0);
           btn.disabled = false; btn.textContent = "Sync partners";
-          toast(imported ? imported + " new booking(s) pulled from partners" : "No new partner bookings");
-          loadIntegrations(); loadDay().then(render);
+          toast(imported ? imported + " new booking(s) pulled — blocks pushed to other channels" : "No new partner bookings");
+          loadIntegrations(); loadActivity(); loadDay().then(render);
         });
       });
 
       /* ---------- boot ---------- */
       function init() {
         loadIntegrations();
+        loadActivity();
         req("POST", "/rpc/get_channels", {}).then(function (list) {
           if (list && list.length) CHANNELS = list;
         }).catch(function () {}).then(function () {
