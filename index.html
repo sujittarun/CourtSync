@@ -15,8 +15,8 @@
   <div class="gate" id="gate">
     <form class="gate-card" id="gateForm">
       <div class="mark">Court<b>Sync</b></div>
-      <p>One board for every booking channel — Playo, Hudle, District, your website, the front desk.</p>
-      <!-- prefilled DUMMY credentials — remove the value attributes at venue handover -->
+      <p>Operator console — the live channel-sync monitor across every venue. Venues connect their own channels from their app; you watch and trigger syncs here.</p>
+      <!-- prefilled DUMMY credentials — remove the value attributes at handover -->
       <label><span>Email</span><input type="email" name="email" required value="staff@leoacademy.in" /></label>
       <label><span>Password</span><input type="password" name="password" required value="123456" /></label>
       <button class="btn primary" type="submit">Open the board</button>
@@ -34,7 +34,6 @@
     <div class="sync-bar">
       <div class="integrations" id="integrations"></div>
       <span class="sp"></span>
-      <button class="btn" id="channelsBtn" type="button">Connect channels</button>
       <button class="btn primary" id="syncBtn" type="button">Sync partners</button>
     </div>
 
@@ -51,10 +50,10 @@
     <div class="activity" id="syncActivity"></div>
 
     <p class="note">
-      One availability board across every channel — a slot taken anywhere is
-      blocked everywhere. Connect each channel by the method it supports: an API
-      where the partner offers one, an assisted sign-in where they don't, or
-      manual where you'd rather block it yourself. Tap a coloured cell to see who holds it.
+      Operator monitor — one availability board across every channel, where a
+      slot taken anywhere is blocked everywhere. Each venue connects its own
+      channels from inside their app; those credentials stay encrypted and this
+      engine keeps the board in sync. Tap a coloured cell to see who holds it.
     </p>
   </div>
 
@@ -262,49 +261,10 @@
         }).catch(function () {});
       }
       function ago(ts) { var m = (Date.now() - new Date(ts)) / 60000; return m < 60 ? Math.max(1, Math.round(m)) + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; }
-      // onboarding: how each channel syncs + its own credentials (encrypted).
-      // Marketplaces rarely expose APIs, so 'autologin' (we sign in for you)
-      // and 'manual' (you block it, we track) are first-class methods.
-      function openChannels() {
-        req("GET", "/integrations?tenant_id=eq." + VENUE + "&select=channel,enabled,config").then(function (rows) {
-          var byCh = {}; (rows || []).forEach(function (r) { byCh[r.channel] = r; });
-          var syncable = CHANNELS.filter(function (c) { return c.id !== "Website" && c.id !== "Walk-in"; });
-          var opts = [["manual", "Manual — I block it myself"], ["autologin", "Auto — sign in for me"], ["api", "API key (if the partner gives one)"], ["off", "Off"]];
-          dlg.innerHTML = "<h2>Connect channels</h2><div class='slotline'>Most marketplaces have no public API — choose how each stays in sync</div>" +
-            syncable.map(function (c) {
-              var cfg = (byCh[c.id] || {}).config || {};
-              var m = (byCh[c.id] && byCh[c.id].enabled === false) ? "off" : (cfg.method || "manual");
-              return "<div class='chn' data-ch='" + esc(c.id) + "'>" +
-                "<div class='chn-h'><span class='dot' style='background:" + c.color + "'></span>" + esc(c.label) +
-                (cfg.secret_id ? " <span class='chn-ok'>connected</span>" : "") + "</div>" +
-                "<select class='chn-m'>" + opts.map(function (o) { return "<option value='" + o[0] + "'" + (o[0] === m ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" +
-                "<div class='chn-creds'></div><button class='btn primary chn-save' type='button'>Save</button></div>";
-            }).join("") + "<div class='acts'><button class='btn' id='dCancel' type='button'>Done</button></div>";
-          back.classList.add("open");
-          document.getElementById("dCancel").onclick = function () { closeDlg(); loadIntegrations(); };
-          Array.prototype.forEach.call(dlg.querySelectorAll(".chn"), function (row) {
-            var sel = row.querySelector(".chn-m"), creds = row.querySelector(".chn-creds");
-            function renderCreds() {
-              var m = sel.value;
-              creds.innerHTML = m === "api" ? "<input class='ci' data-k='api_key' placeholder='Partner API key' />"
-                : m === "autologin" ? "<input class='ci' data-k='username' placeholder='Partner login (email / phone)' /><input class='ci' data-k='password' type='password' placeholder='Password' />"
-                : m === "manual" ? "<span class='chn-note'>You block this channel yourself; we keep the board in sync.</span>"
-                : "<span class='chn-note'>Not synced.</span>";
-            }
-            renderCreds(); sel.addEventListener("change", renderCreds);
-            row.querySelector(".chn-save").addEventListener("click", function () {
-              var btn = this; btn.disabled = true;
-              var m = sel.value, enabled = m !== "off", method = m === "off" ? "manual" : m, cr = null;
-              var ins = row.querySelectorAll(".ci");
-              if (ins.length) { cr = {}; Array.prototype.forEach.call(ins, function (i) { if (i.value) cr[i.dataset.k] = i.value; }); if (!Object.keys(cr).length) cr = null; }
-              req("POST", "/rpc/connect_integration", { p_tenant: VENUE, p_channel: row.dataset.ch, p_method: method, p_creds: cr, p_enabled: enabled })
-                .then(function () { btn.disabled = false; toast(row.dataset.ch + " saved ✓"); })
-                .catch(function (e) { btn.disabled = false; toast("Couldn't save: " + e.message); });
-            });
-          });
-        });
-      }
-      document.getElementById("channelsBtn").addEventListener("click", openChannels);
+      // NOTE: channels are connected by each venue inside their OWN app (the
+      // academy's staff console) — those credentials are encrypted into Vault
+      // and read by this engine. CourtSync is the operator's monitor: it shows
+      // sync health and can trigger a pull, but never captures credentials.
 
       function loadActivity() {
         return req("GET", "/sync_log?tenant_id=eq." + VENUE + "&order=at.desc&limit=8&select=channel,action,status,detail,at").then(function (rows) {
